@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地视频字幕提取</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #1c1917;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e7e5e4;
+            border-radius: 2px;
+        }
+        .drop-active {
+            border-color: #1c1917 !important;
+            background-color: #fafaf9 !important;
+        }
+        .checkbox {
+            accent-color: #1c1917;
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800 min-h-screen">
+    <div class="max-w-4xl mx-auto px-6 py-10">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold text-stone-900 tracking-tight">视频字幕提取</h1>
+            <p class="text-stone-500 mt-1 text-sm">本地离线运行 · 支持批量上传 · 基于 Faster-Whisper</p>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-5 mb-6">
+            <div
+                id="dropZone"
+                class="border-2 border-dashed border-stone-300 rounded-lg p-8 text-center transition-colors cursor-pointer hover:border-stone-400"
+                onclick="document.getElementById('fileInput').click()"
+            >
+                <svg class="w-9 h-9 text-stone-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V6.75A2.25 2.25 0 016.75 4.5h10.5A2.25 2.25 0 0119.5 6.75v10.5a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25z"></path>
+                </svg>
+                <p class="text-stone-600 font-medium text-sm">点击或拖拽上传视频</p>
+                <p class="text-stone-400 text-xs mt-1">支持批量上传多个 MP4 / MOV / MKV 文件</p>
+                <input type="file" id="fileInput" class="hidden" accept="video/*" multiple onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Selected Files -->
+            <div id="fileListBox" class="hidden mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-stone-500">已选择文件</span>
+                    <button onclick="clearFiles()" class="text-xs text-stone-500 hover:text-stone-800">清空全部</button>
+                </div>
+                <div id="fileList" class="space-y-2 max-h-40 overflow-y-auto pr-1"></div>
+            </div>
+
+            <!-- Config -->
+            <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-stone-500 mb-2">模型选择</label>
+                    <div class="flex rounded-lg border border-stone-200 overflow-hidden" id="modelButtons">
+                        <button type="button" data-model="small" class="flex-1 py-2 text-sm font-medium bg-stone-900 text-white transition-colors" onclick="selectModel('small')">small · 快速</button>
+                        <button type="button" data-model="medium" class="flex-1 py-2 text-sm font-medium bg-white text-stone-600 hover:bg-stone-50 transition-colors border-l border-stone-200" onclick="selectModel('medium')">medium · 精准</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <label class="text-xs font-medium text-stone-500">CPU 线程数</label>
+                        <span id="threadValue" class="text-xs font-semibold text-stone-800">16</span>
+                    </div>
+                    <input type="range" id="threadSlider" min="4" max="24" value="16" step="2" oninput="updateThreads(this.value)">
+                    <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+                        <span>4</span>
+                        <span>24</span>
+                    </div>
+                </div>
+            </div>
+
+            <button
+                id="submitBtn"
+                onclick="startUpload()"
+                disabled
+                class="mt-5 w-full py-2.5 bg-stone-900 text-white text-sm font-medium rounded-lg hover:bg-stone-800 disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed transition-colors"
+            >开始提取</button>
+        </div>
+
+        <!-- Global Progress -->
+        <div id="globalProgress" class="hidden bg-white rounded-xl shadow-sm border border-stone-200 p-4 mb-6">
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-sm font-medium text-stone-900">批量处理中</p>
+                <span id="globalBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">处理中</span>
+            </div>
+            <p id="globalMessage" class="text-xs text-stone-500 mb-2">初始化中...</p>
+            <div class="w-full bg-stone-100 rounded-full h-2 overflow-hidden">
+                <div id="globalProgressBar" class="bg-stone-800 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <p id="globalProgressText" class="text-right text-xs text-stone-500 mt-2">0%</p>
+        </div>
+
+        <!-- Task History -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-semibold text-stone-900">任务记录</h2>
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-1.5 text-xs text-stone-600 cursor-pointer select-none">
+                        <input type="checkbox" class="checkbox w-3.5 h-3.5" onchange="toggleSelectAll(this.checked)">
+                        全选已完成
+                    </label>
+                </div>
+            </div>
+
+            <!-- Bulk Actions -->
+            <div id="bulkActions" class="hidden flex flex-wrap gap-2 mb-4 pb-4 border-b border-stone-100">
+                <button onclick="bulkDownload('srt')" class="px-3 py-1.5 bg-stone-900 text-white text-xs font-medium rounded-md hover:bg-stone-800 transition-colors">
+                    批量下载 SRT
+                </button>
+                <button onclick="bulkDownload('txt')" class="px-3 py-1.5 bg-stone-800 text-white text-xs font-medium rounded-md hover:bg-stone-700 transition-colors">
+                    批量下载 TXT
+                </button>
+                <button onclick="bulkDownload('both')" class="px-3 py-1.5 bg-white border border-stone-300 text-stone-700 text-xs font-medium rounded-md hover:bg-stone-50 transition-colors">
+                    批量下载全部
+                </button>
+            </div>
+
+            <div id="taskList" class="space-y-3">
+                <div class="text-center py-8 text-stone-400 text-sm">暂无任务</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let selectedModel = 'small';
+        let selectedThreads = 16;
+        let activeTaskIds = new Set();
+        let eventSources = {};
+
+        const dropZone = document.getElementById('dropZone');
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drop-active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-active'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drop-active');
+            if (e.dataTransfer.files.length) {
+                addFiles(Array.from(e.dataTransfer.files));
+            }
+        });
+
+        function handleFileSelect(e) {
+            if (e.target.files.length) addFiles(Array.from(e.target.files));
+        }
+
+        function addFiles(files) {
+            files.forEach(f => {
+                if (!selectedFiles.some(sf => sf.name === f.name && sf.size === f.size)) {
+                    selectedFiles.push(f);
+                }
+            });
+            renderFileList();
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        function clearFiles() {
+            selectedFiles = [];
+            document.getElementById('fileInput').value = '';
+            renderFileList();
+        }
+
+        function renderFileList() {
+            const box = document.getElementById('fileListBox');
+            const list = document.getElementById('fileList');
+            const btn = document.getElementById('submitBtn');
+
+            if (!selectedFiles.length) {
+                box.classList.add('hidden');
+                btn.disabled = true;
+                list.innerHTML = '';
+                return;
+            }
+
+            box.classList.remove('hidden');
+            btn.disabled = false;
+            list.innerHTML = selectedFiles.map((f, i) => `
+                <div class="flex items-center gap-2 text-sm text-stone-700 bg-stone-50 px-3 py-2 rounded-md border border-stone-100">
+                    <svg class="w-4 h-4 text-stone-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z"></path>
+                    </svg>
+                    <span class="truncate flex-1" title="${f.name}">${f.name}</span>
+                    <span class="text-xs text-stone-400 shrink-0">${(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button onclick="removeFile(${i})" class="text-stone-400 hover:text-stone-600 shrink-0 ml-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function selectModel(model) {
+            selectedModel = model;
+            document.querySelectorAll('#modelButtons button').forEach(btn => {
+                if (btn.dataset.model === model) {
+                    btn.className = 'flex-1 py-2 text-sm font-medium bg-stone-900 text-white transition-colors';
+                } else {
+                    btn.className = 'flex-1 py-2 text-sm font-medium bg-white text-stone-600 hover:bg-stone-50 transition-colors border-l border-stone-200';
+                }
+            });
+        }
+
+        function updateThreads(val) {
+            selectedThreads = parseInt(val);
+            document.getElementById('threadValue').textContent = val;
+        }
+
+        async function startUpload() {
+            if (!selectedFiles.length) return;
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+
+            const formData = new FormData();
+            selectedFiles.forEach(f => formData.append('files', f));
+            formData.append('model', selectedModel);
+            formData.append('threads', selectedThreads);
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                clearFiles();
+                btn.textContent = '开始提取';
+                btn.disabled = true;
+
+                data.tasks.forEach(t => {
+                    activeTaskIds.add(t.task_id);
+                    connectSSE(t.task_id);
+                });
+
+                showGlobalProgress();
+                await loadTasks();
+            } catch (err) {
+                alert('上传失败：' + err.message);
+                btn.textContent = '开始提取';
+                btn.disabled = false;
+            }
+        }
+
+        function connectSSE(taskId) {
+            if (eventSources[taskId]) return;
+            const es = new EventSource(`/api/progress/${taskId}`);
+            eventSources[taskId] = es;
+            es.onmessage = async (e) => {
+                const payload = JSON.parse(e.data);
+                updateTask(taskId, payload);
+                updateGlobalProgress();
+
+                if (payload.status === 'completed' || payload.status === 'failed') {
+                    es.close();
+                    delete eventSources[taskId];
+                    activeTaskIds.delete(taskId);
+                    await loadTasks();
+                    updateGlobalProgress();
+                }
+            };
+            es.onerror = () => {
+                es.close();
+                delete eventSources[taskId];
+            };
+        }
+
+        function updateTask(taskId, payload) {
+            if (tasks[taskId]) {
+                Object.assign(tasks[taskId], payload);
+            }
+        }
+
+        let tasks = {};
+        let selectedTaskIds = new Set();
+
+        function showGlobalProgress() {
+            const card = document.getElementById('globalProgress');
+            card.classList.remove('hidden');
+        }
+
+        function updateGlobalProgress() {
+            if (!activeTaskIds.size) {
+                document.getElementById('globalProgress').classList.add('hidden');
+                return;
+            }
+            let total = 0, count = 0;
+            activeTaskIds.forEach(tid => {
+                const t = tasks[tid];
+                if (t) { total += t.progress || 0; count++; }
+            });
+            const avg = count ? total / count : 0;
+            document.getElementById('globalProgressBar').style.width = avg + '%';
+            document.getElementById('globalProgressText').textContent = avg.toFixed(1) + '%';
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '';
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}分${s}秒`;
+        }
+
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/tasks');
+                const data = await res.json();
+                data.forEach(t => { tasks[t.id] = t; });
+                renderTasks(data);
+                updateBulkActions();
+            } catch (e) {
+                console.error('加载任务失败', e);
+            }
+        }
+
+        function renderTasks(taskList) {
+            const container = document.getElementById('taskList');
+            if (!taskList.length) {
+                container.innerHTML = '<div class="text-center py-8 text-stone-400 text-sm">暂无任务</div>';
+                return;
+            }
+
+            container.innerHTML = taskList.map(t => {
+                const statusClass =
+                    t.status === 'pending' ? 'bg-stone-100 text-stone-600' :
+                    t.status === 'processing' ? 'bg-amber-100 text-amber-700' :
+                    t.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-rose-100 text-rose-700';
+                const statusText =
+                    t.status === 'pending' ? '排队中' :
+                    t.status === 'processing' ? '处理中' :
+                    t.status === 'completed' ? '已完成' : '失败';
+
+                const isChecked = selectedTaskIds.has(t.id) ? 'checked' : '';
+                const checkbox = t.status === 'completed' ? `
+                    <input type="checkbox" class="checkbox w-4 h-4 mr-3" data-task-id="${t.id}" ${isChecked} onchange="onTaskSelect(this)">
+                ` : '<div class="w-4 h-4 mr-3"></div>';
+
+                const downloads = t.status === 'completed' ? `
+                    <div class="flex gap-2 mt-2 sm:mt-0">
+                        <a href="/api/download/${t.id}/srt" class="inline-flex items-center px-2.5 py-1 bg-white border border-stone-200 rounded text-xs font-medium text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-colors">
+                            SRT
+                        </a>
+                        <a href="/api/download/${t.id}/txt" class="inline-flex items-center px-2.5 py-1 bg-white border border-stone-200 rounded text-xs font-medium text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-colors">
+                            TXT
+                        </a>
+                    </div>
+                ` : '';
+
+                const progressBar = t.status === 'processing' ? `
+                    <div class="w-full bg-stone-100 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div class="bg-stone-800 h-1.5 rounded-full transition-all duration-500" style="width: ${t.progress || 0}%"></div>
+                    </div>
+                ` : '';
+
+                return `
+                    <div class="flex items-start sm:items-center p-3 rounded-lg border border-stone-200 hover:border-stone-300 transition-colors ${t.status === 'processing' ? 'bg-stone-50' : 'bg-white'}">
+                        ${checkbox}
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <p class="text-sm font-medium text-stone-900 truncate" title="${t.filename}">${t.filename}</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-stone-500 border border-stone-100">${t.model}</span>
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${statusClass}">${statusText}</span>
+                                ${t.duration ? `<span class="text-[10px] text-stone-400">${formatDuration(t.duration)}</span>` : ''}
+                                ${t.segment_count ? `<span class="text-[10px] text-stone-400">${t.segment_count} 段字幕</span>` : ''}
+                            </div>
+                            ${t.status === 'failed' ? `<p class="text-xs text-rose-500 mt-1 truncate" title="${t.message}">${t.message}</p>` : ''}
+                            ${progressBar}
+                        </div>
+                        ${downloads}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function onTaskSelect(checkbox) {
+            const taskId = checkbox.dataset.taskId;
+            if (checkbox.checked) {
+                selectedTaskIds.add(taskId);
+            } else {
+                selectedTaskIds.delete(taskId);
+            }
+            updateBulkActions();
+        }
+
+        function updateBulkActions() {
+            const bar = document.getElementById('bulkActions');
+            if (selectedTaskIds.size > 0) {
+                bar.classList.remove('hidden');
+                bar.classList.add('flex');
+            } else {
+                bar.classList.add('hidden');
+                bar.classList.remove('flex');
+            }
+        }
+
+        function toggleSelectAll(checked) {
+            if (checked) {
+                document.querySelectorAll('#taskList input[type=checkbox]').forEach(cb => {
+                    selectedTaskIds.add(cb.dataset.taskId);
+                    cb.checked = true;
+                });
+            } else {
+                selectedTaskIds.clear();
+                document.querySelectorAll('#taskList input[type=checkbox]').forEach(cb => cb.checked = false);
+            }
+            updateBulkActions();
+        }
+
+        async function bulkDownload(format) {
+            const checked = document.querySelectorAll('#taskList input[type=checkbox]:checked');
+            if (!checked.length) return;
+            const taskIds = Array.from(checked).map(cb => cb.dataset.taskId).join(',');
+
+            const formData = new FormData();
+            formData.append('task_ids', taskIds);
+            formData.append('format', format);
+
+            try {
+                const res = await fetch('/api/bulk_download', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error('下载失败');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `subtitles_${format}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('批量下载失败：' + err.message);
+            }
+        }
+
+        loadTasks();
+        setInterval(() => {
+            loadTasks();
+            activeTaskIds.forEach(tid => {
+                if (!eventSources[tid]) connectSSE(tid);
+            });
+        }, 2000);
+    </script>
+</body>
+</html>
