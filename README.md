@@ -43,6 +43,10 @@
 
 **macOS**：
 ```bash
+# 如未安装 Homebrew，先执行：
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 安装 FFmpeg
 brew install ffmpeg
 ```
 
@@ -57,12 +61,12 @@ sudo apt update && sudo apt install ffmpeg -y
 git clone https://github.com/Crush0321/V2T-Core.git
 cd V2T-Core
 
-python -m venv venv
-
 # Windows
+python -m venv venv
 venv\Scripts\activate
 
 # macOS / Linux
+python3 -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
@@ -91,7 +95,7 @@ http://localhost:8000
 2. **选择模型**：
    - `small` — 速度更快，适合短视频/抖音（推荐）
    - `medium` — 精度更高，适合对字幕准确率要求高的场景
-3. **调节线程**：默认 16 线程，可根据 CPU 核心数微调
+3. **调节线程**：默认 8 线程，可根据 CPU 核心数微调
 4. **开始提取**：点击「开始提取」，任务自动进入队列处理
 5. **下载结果**：
    - 单个下载：任务完成后点击右侧 **SRT** 或 **TXT**

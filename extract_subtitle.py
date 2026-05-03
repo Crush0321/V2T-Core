@@ -63,8 +63,8 @@ def main():
     parser.add_argument(
         "-t", "--threads",
         type=int,
-        default=16,
-        help="CPU 线程数（默认 16，i7-14700 建议 16~20）"
+        default=8,
+        help="CPU 线程数（默认 8，Apple M4 建议 8，Intel i7-14700 建议 16~20）"
     )
     parser.add_argument(
         "--no-vad",

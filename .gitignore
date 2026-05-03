@@ -27,6 +27,9 @@ wheels/
 uploads/
 outputs/
 
+# Video data (too large for git)
+douyin/
+
 # IDE
 .vscode/
 .idea/

@@ -26,8 +26,10 @@ from faster_whisper import WhisperModel
 # ---------- 配置 ----------
 UPLOAD_DIR = Path("./uploads")
 OUTPUT_DIR = Path("./outputs")
+TXT_OUTPUT_DIR = Path("./outputs/txt")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+TXT_OUTPUT_DIR.mkdir(exist_ok=True)
 
 templates = Jinja2Templates(directory="templates")
 
@@ -161,15 +163,16 @@ async def worker():
             task["progress"] = 100.0
             task["message"] = "正在生成文件..."
 
+            # SRT 保留在 per-task 目录，TXT 扁平存储到 outputs/txt/ 方便直接查阅
             srt_path = out_dir / f"{task['stem']}.srt"
-            txt_path = out_dir / f"{task['stem']}.txt"
+            flat_txt_path = TXT_OUTPUT_DIR / f"{task_id}_{task['stem']}.txt"
             write_srt(segments, srt_path)
-            write_txt(segments, txt_path)
+            write_txt(segments, flat_txt_path)
 
             task["status"] = "completed"
             task["message"] = f"完成，检测到语言：{detected_lang}"
             task["srt_path"] = str(srt_path)
-            task["txt_path"] = str(txt_path)
+            task["txt_path"] = str(flat_txt_path)
             task["segment_count"] = len(segments)
 
         except Exception as e:
@@ -199,7 +202,7 @@ async def index(request: Request):
 async def upload(
     files: list[UploadFile] = File(...),
     model: str = Form("small"),
-    threads: int = Form(16),
+    threads: int = Form(8),
 ):
     result = []
     for file in files:
