@@ -143,8 +143,10 @@ async def worker():
             task["message"] = "正在提取字幕..."
             segments_generator, info = model.transcribe(
                 str(upload_path),
+                language="zh",
                 vad_filter=True,
                 word_timestamps=False,
+                initial_prompt="以下是普通话的句子。",
             )
 
             detected_lang = info.language

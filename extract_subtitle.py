@@ -111,8 +111,10 @@ def main():
     print("⏳ 正在提取字幕，请稍候...")
     segments, info = model.transcribe(
         str(input_path),
+        language="zh",
         vad_filter=not args.no_vad,
         word_timestamps=False,
+        initial_prompt="以下是普通话的句子。",
     )
 
     # 由于 segments 是生成器，需要转成列表才能多次使用

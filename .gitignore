@@ -26,6 +26,7 @@ wheels/
 # Project runtime data
 uploads/
 outputs/
+distill/personas/*/corpus.txt
 
 # Video data (too large for git)
 douyin/
